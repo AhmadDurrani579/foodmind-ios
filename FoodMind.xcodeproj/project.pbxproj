@@ -29,9 +29,37 @@
 		E0BED1BC2F64B21A00C7ED2F /* FoodMindUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FoodMindUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E0BED2502F64EF8000C7ED2F /* Exceptions for "FoodMind" folder in "FoodMind" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Helper/Extensions.swift,
+				ML/VisionManager.swift,
+				Models/FMScanHistoryItem.swift,
+			);
+			target = E0BED1A42F64B21800C7ED2F /* FoodMind */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		E0BED2512F64EF8000C7ED2F /* Exceptions for "FoodMind" folder in "Copy Bundle Resources" phase from "FoodMind" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = E0BED1A32F64B21800C7ED2F /* Resources */;
+			membershipExceptions = (
+				Helper/Extensions.swift,
+				ML/VisionManager.swift,
+				Models/FMScanHistoryItem.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E0BED1A72F64B21800C7ED2F /* FoodMind */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E0BED2502F64EF8000C7ED2F /* Exceptions for "FoodMind" folder in "FoodMind" target */,
+				E0BED2512F64EF8000C7ED2F /* Exceptions for "FoodMind" folder in "Copy Bundle Resources" phase from "FoodMind" target */,
+			);
 			path = FoodMind;
 			sourceTree = "<group>";
 		};
@@ -400,6 +428,8 @@
 				DEVELOPMENT_TEAM = VVS3USCHVC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "FoodMind needs camera access to scan your food";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FoodMind needs photo access to analyse your food";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,6 +462,8 @@
 				DEVELOPMENT_TEAM = VVS3USCHVC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "FoodMind needs camera access to scan your food";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FoodMind needs photo access to analyse your food";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
