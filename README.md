@@ -189,7 +189,7 @@ foodmind-backend/
 ## 🚀 Backend Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/foodmind-backend
+git clone https://github.com/AhmadDurrani579/foodmind
 cd foodmind-backend
 
 # Add environment variables
@@ -207,7 +207,7 @@ uvicorn app.main:app --reload --port 7860
 ## 📱 iOS Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/FoodMind
+git clone https://github.com/AhmadDurrani579/FoodMind
 cd FoodMind
 
 # Open in Xcode
