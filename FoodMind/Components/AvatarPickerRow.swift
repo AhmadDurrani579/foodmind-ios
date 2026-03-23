@@ -10,7 +10,9 @@ import SwiftUI
 struct AvatarPickerRow: View {
  
     @State private var showImagePicker  = false
-    @State private var selectedImage:   UIImage? = nil
+//    @State private var selectedImage:   UIImage? = nil
+    @Binding var selectedImage: UIImage?
+
  
     var body: some View {
         HStack(spacing: 14) {

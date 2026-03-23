@@ -7,7 +7,7 @@
 import SwiftUI
 
 struct ScanHistoryRow: View {
-    let item: FMScanHistoryItem
+    let item: Scan
  
     var body: some View {
         HStack(spacing: 12) {
@@ -44,7 +44,7 @@ struct ScanHistoryRow: View {
  
             // Calories + macros
             VStack(alignment: .trailing, spacing: 3) {
-                Text("\(item.calories)")
+                Text("\(item.calories ?? 0)")
                     .font(.system(size: 16, weight: .semibold, design: .serif))
                     .foregroundColor(FMColors.orange)
                 Text("kcal")

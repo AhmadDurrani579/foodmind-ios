@@ -12,8 +12,7 @@ import SwiftUI
 // ─────────────────────────────────────
 struct FeedView: View {
  
-    // Mock data — replace with API call later
-    @State private var posts: [FMPost] = FMPost.mockFeed
+    @StateObject private var viewModel = FeedViewModel()
 
     var body: some View {
         ZStack {
@@ -25,14 +24,38 @@ struct FeedView: View {
                 FeedHeader()
  
                 // ── Posts ───────────────────
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach($posts) { $post in
-                            FeedPostCard(post: $post)
+                
+                if viewModel.isSharing {
+                    Spacer()
+                    ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: FMColors.green))
+                    .scaleEffect(1.4)
+                    Spacer()
+
+                }else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach($viewModel.posts) { $post in
+                                FeedPostCard(post: $post)
+                            }
+                            
+                            // Bottom padding for tab bar
+                            Color.clear.frame(height: 90)
                         }
- 
-                        // Bottom padding for tab bar
-                        Color.clear.frame(height: 90)
+                    }.refreshable {
+                        viewModel.loadFeed()        // ← pull to refresh
+                    }
+                    .onAppear {
+                        if viewModel.posts.isEmpty {
+                            viewModel.loadFeed()    // ← only on first load
+                        }
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(
+                            for: Notification.Name("NewPostShared")
+                        )
+                    ) { _ in
+                        viewModel.loadFeed()        // ← refresh after share
                     }
                 }
             }
@@ -157,13 +180,13 @@ private struct PostHeader: View {
 // MARK: — Food Photo View
 // ─────────────────────────────────────
 private struct FoodPhotoView: View {
- 
+
     let post: FMPost
- 
+
     var body: some View {
+
         ZStack(alignment: .bottomLeading) {
- 
-            // Photo background
+
             Rectangle()
                 .fill(
                     LinearGradient(
@@ -175,24 +198,28 @@ private struct FoodPhotoView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .aspectRatio(1, contentMode: .fit)
-                .overlay(
-                    // Ambient glow
-                    Circle()
-                        .fill(FMColors.green.opacity(0.15))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 50)
-                        .offset(x: -40, y: -40)
-                )
-                .overlay(
-                    // Food emoji centred
-                    Text(post.foodEmoji)
-                        .font(.system(size: 80))
-                )
- 
-            // Nutrition overlay at bottom
+                .overlay {
+
+                    if let urlString = post.imageURL,
+                       let url = URL(string: urlString) {
+
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                    }
+                }
+
             NutritionOverlay(post: post)
         }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)   // ⭐ FIX
+        .clipped()
     }
 }
  

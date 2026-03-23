@@ -8,6 +8,8 @@ import SwiftUI
 struct MainTabView: View {
 
     @State private var selectedTab: FMTab = .feed
+    @EnvironmentObject var wsManager: WebSocketManager
+    @EnvironmentObject var authManager: AuthManager
 
     // Hide tab bar when on camera
     var shouldShowTabBar: Bool {

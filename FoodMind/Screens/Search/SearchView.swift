@@ -2,212 +2,25 @@
 //  SearchView.swift
 //  FoodMind
 //
-//  Created by Ahmad on 14/03/2026.
+//  Screens/Search/SearchView.swift
 //
 
 import SwiftUI
- 
-// ─────────────────────────────────────
-// MARK: — Search Models
-// ─────────────────────────────────────
-struct FMSearchUser: Identifiable {
-    let id:          String
-    let username:    String
-    let displayName: String
-    let avatar:      String
-    let location:    String
-    let avgCalories: Int
-    let scans:       Int
-    let topDish:     String
-    let topDishEmoji:String
-    var isFollowing: Bool
-}
- 
-struct FMTrendingDish: Identifiable {
-    let id:       String
-    let emoji:    String
-    let name:     String
-    let scans:    Int
-    let calories: Int
-    let tag:      String
-    let tagColor: String
-}
- 
-// ─────────────────────────────────────
-// MARK: — Mock Data
-// ─────────────────────────────────────
-extension FMSearchUser {
-    static let mockUsers: [FMSearchUser] = [
-        FMSearchUser(
-            id: "u1",
-            username: "sara.eats",
-            displayName: "Sara Ahmed",
-            avatar: "👩",
-            location: "London",
-            avgCalories: 1640,
-            scans: 89,
-            topDish: "Grilled Salmon",
-            topDishEmoji: "🐟",
-            isFollowing: true
-        ),
-        FMSearchUser(
-            id: "u2",
-            username: "mike.chef",
-            displayName: "Mike Chen",
-            avatar: "👨🏽",
-            location: "Manchester",
-            avgCalories: 2340,
-            scans: 124,
-            topDish: "Ramen",
-            topDishEmoji: "🍜",
-            isFollowing: false
-        ),
-        FMSearchUser(
-            id: "u3",
-            username: "luna.fit",
-            displayName: "Luna Park",
-            avatar: "👩🏻",
-            location: "Birmingham",
-            avgCalories: 1480,
-            scans: 67,
-            topDish: "Sushi",
-            topDishEmoji: "🍱",
-            isFollowing: true
-        ),
-        FMSearchUser(
-            id: "u4",
-            username: "jay.real",
-            displayName: "Jay Williams",
-            avatar: "🧑🏾",
-            location: "Leeds",
-            avgCalories: 2890,
-            scans: 43,
-            topDish: "Burger",
-            topDishEmoji: "🍔",
-            isFollowing: false
-        ),
-        FMSearchUser(
-            id: "u5",
-            username: "ava.wellness",
-            displayName: "Ava Johnson",
-            avatar: "👩‍🦱",
-            location: "Bristol",
-            avgCalories: 1320,
-            scans: 156,
-            topDish: "Acai Bowl",
-            topDishEmoji: "🫐",
-            isFollowing: false
-        ),
-        FMSearchUser(
-            id: "u6",
-            username: "kai.food",
-            displayName: "Kai Tanaka",
-            avatar: "🧑🏻",
-            location: "Edinburgh",
-            avgCalories: 1980,
-            scans: 78,
-            topDish: "Ramen",
-            topDishEmoji: "🍜",
-            isFollowing: false
-        ),
-        FMSearchUser(
-            id: "u7",
-            username: "priya.bites",
-            displayName: "Priya Sharma",
-            avatar: "👩🏾",
-            location: "Leicester",
-            avgCalories: 1740,
-            scans: 92,
-            topDish: "Biryani",
-            topDishEmoji: "🍛",
-            isFollowing: true
-        )
-    ]
-}
- 
-extension FMTrendingDish {
-    static let mockTrending: [FMTrendingDish] = [
-        FMTrendingDish(
-            id: "d1",
-            emoji: "🍕",
-            name: "Margherita Pizza",
-            scans: 2341,
-            calories: 890,
-            tag: "Italian",
-            tagColor: "E8834A"
-        ),
-        FMTrendingDish(
-            id: "d2",
-            emoji: "🥗",
-            name: "Chicken Salad",
-            scans: 1892,
-            calories: 380,
-            tag: "Healthy",
-            tagColor: "8DB87A"
-        ),
-        FMTrendingDish(
-            id: "d3",
-            emoji: "🍜",
-            name: "Ramen Bowl",
-            scans: 1654,
-            calories: 620,
-            tag: "Japanese",
-            tagColor: "5DADE2"
-        ),
-        FMTrendingDish(
-            id: "d4",
-            emoji: "🍔",
-            name: "Beef Burger",
-            scans: 1423,
-            calories: 1240,
-            tag: "American",
-            tagColor: "E07A55"
-        ),
-        FMTrendingDish(
-            id: "d5",
-            emoji: "🍛",
-            name: "Chicken Biryani",
-            scans: 1187,
-            calories: 720,
-            tag: "Indian",
-            tagColor: "F2C94C"
-        ),
-        FMTrendingDish(
-            id: "d6",
-            emoji: "🍱",
-            name: "Salmon Sushi",
-            scans: 934,
-            calories: 520,
-            tag: "Japanese",
-            tagColor: "5DADE2"
-        )
-    ]
-}
+import Combine
 
-
+// ─────────────────────────────────────
+// MARK: — SearchView
+// ─────────────────────────────────────
 struct SearchView: View {
  
-    @State private var searchText       = ""
-    @State private var users            = FMSearchUser.mockUsers
-    @State private var trendingDishes   = FMTrendingDish.mockTrending
-    @State private var selectedFilter   = "All"
-    @FocusState private var searchFocused: Bool
+    @StateObject private var viewModel = SearchViewModel()
+    @FocusState  private var focused:   Bool
  
-    let filters = ["All", "Following", "Healthy", "Italian", "Asian", "Indian"]
- 
-    // Filtered users based on search text
-    var filteredUsers: [FMSearchUser] {
-        if searchText.isEmpty {
-            if selectedFilter == "All"       { return users }
-            if selectedFilter == "Following" { return users.filter { $0.isFollowing } }
-            return users
-        }
-        return users.filter {
-            $0.username.localizedCaseInsensitiveContains(searchText) ||
-            $0.displayName.localizedCaseInsensitiveContains(searchText) ||
-            $0.topDish.localizedCaseInsensitiveContains(searchText)
-        }
-    }
+    private let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
  
     var body: some View {
         ZStack {
@@ -215,283 +28,374 @@ struct SearchView: View {
  
             VStack(spacing: 0) {
  
-                // ── Header ──────────────────
-                SearchHeader(
-                    searchText:     $searchText,
-                    searchFocused:  $searchFocused
-                )
+                // ── Search Bar ────────────────
+                searchBar
+                    .padding(.top, 16)
+                    .padding(.bottom, 4)
  
-                // ── Filter Pills ────────────
-                FilterPillsRow(
-                    filters:        filters,
-                    selectedFilter: $selectedFilter
-                )
- 
-                // ── Content ─────────────────
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
  
-                        // Show trending when not searching
-                        if searchText.isEmpty {
+                        if viewModel.searchText.isEmpty &&
+                           viewModel.selectedTag == nil {
  
-                            // Trending dishes
-                            TrendingDishesSection(dishes: trendingDishes)
+                            // ── Trending ──────────────
+                            if !viewModel.trendingTags.isEmpty {
+                                trendingSection
+                                    .padding(.top, 12)
+                            }
  
-                            // Suggested users
-                            SuggestedUsersSection(
-                                users:   $users,
-                                filter:  selectedFilter
+                            // ── Explore Header ────────
+                            sectionHeader(
+                                title:    "Explore",
+                                subtitle: "\(viewModel.posts.count) scans"
                             )
  
                         } else {
-                            // Search results
-                            SearchResultsSection(users: $users, filtered: filteredUsers)
+ 
+                            // ── Nutrition Card ────────
+                            if let s = viewModel.nutritionSummary {
+                                nutritionCard(s)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 4)
+                            }
+ 
+                            // ── Results Header ────────
+                            sectionHeader(
+                                title: viewModel.selectedTag != nil
+                                    ? "#\(viewModel.selectedTag!)"
+                                    : viewModel.searchText,
+                                subtitle: "\(viewModel.filteredPosts.count) results"
+                            )
                         }
  
-                        Color.clear.frame(height: 90)
+                        // ── Grid ──────────────────────
+                        if viewModel.isLoading {
+                            loadingView
+                        } else if viewModel.filteredPosts.isEmpty {
+                            emptyView
+                        } else {
+                            postsGrid
+                        }
                     }
                 }
             }
         }
-        .onTapGesture {
-            searchFocused = false
+        .onAppear { viewModel.loadPosts() }
+        .onChange(of: viewModel.searchText) { _, q in
+            viewModel.search(query: q)
         }
     }
-}
  
-// ─────────────────────────────────────
-// MARK: — Search Header
-// ─────────────────────────────────────
-private struct SearchHeader: View {
+    // ─────────────────────────────────
+    // MARK: — Search Bar
+    // ─────────────────────────────────
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15))
+                .foregroundColor(FMColors.cream.opacity(0.35))
  
-    @Binding var searchText:    String
-    @FocusState.Binding var searchFocused: Bool
- 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
- 
-            Text("Discover")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
-                .foregroundColor(FMColors.cream)
- 
-            // Search bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundColor(
-                        searchFocused
-                            ? FMColors.green
-                            : FMColors.cream.opacity(0.3)
-                    )
- 
-                TextField("Search people, dishes...", text: $searchText)
-                    .font(.system(size: 14))
+            ZStack(alignment: .leading) {
+                if viewModel.searchText.isEmpty {
+                    Text("Search food, cuisine, tags...")
+                        .font(.system(size: 15))
+                        .foregroundColor(FMColors.cream.opacity(0.25))
+                }
+                TextField("", text: $viewModel.searchText)
+                    .font(.system(size: 15))
                     .foregroundColor(FMColors.cream)
-                    .focused($searchFocused)
-                    .autocorrectionDisabled()
-                    .autocapitalization(.none)
+                    .focused($focused)
+            }
  
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        searchFocused = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(FMColors.cream.opacity(0.3))
-                    }
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                    focused = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(FMColors.cream.opacity(0.3))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(FMColors.surface)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        searchFocused
-                            ? FMColors.green.opacity(0.4)
-                            : FMColors.border,
-                        lineWidth: searchFocused ? 1.5 : 1
-                    )
-            )
-            .animation(.easeInOut(duration: 0.2), value: searchFocused)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 58)
-        .padding(.bottom, 12)
-        .background(FMColors.background)
-        .overlay(
-            Rectangle()
-                .fill(FMColors.border2)
-                .frame(height: 0.5),
-            alignment: .bottom
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color(hex: "1C1D17"))
+        .cornerRadius(12)
+        .padding(.horizontal, 16)
     }
-}
  
-// ─────────────────────────────────────
-// MARK: — Filter Pills Row
-// ─────────────────────────────────────
-private struct FilterPillsRow: View {
+    // ─────────────────────────────────
+    // MARK: — Trending Tags
+    // ─────────────────────────────────
+    private var trendingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TRENDING")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(FMColors.cream.opacity(0.3))
+                .tracking(1.5)
+                .padding(.horizontal, 16)
  
-    let filters: [String]
-    @Binding var selectedFilter: String
- 
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(filters, id: \.self) { filter in
-                    FilterPill(
-                        label:      filter,
-                        isSelected: selectedFilter == filter
-                    ) {
-                        withAnimation(.spring(response: 0.3)) {
-                            selectedFilter = filter
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(viewModel.trendingTags) { tag in
+                        Button {
+                            viewModel.filterByTag(tag.tag)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(tag.tag)
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("·")
+                                    .opacity(0.4)
+                                Text("\(tag.count)")
+                                    .font(.system(size: 11))
+                                    .opacity(0.6)
+                            }
+                            .foregroundColor(
+                                viewModel.selectedTag == tag.tag
+                                    ? FMColors.background
+                                    : FMColors.cream
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                viewModel.selectedTag == tag.tag
+                                    ? FMColors.green
+                                    : Color(hex: "1C1D17")
+                            )
+                            .cornerRadius(20)
                         }
                     }
                 }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
         }
-        .background(FMColors.background)
+        .padding(.bottom, 8)
+    }
+ 
+    // ─────────────────────────────────
+    // MARK: — Section Header
+    // ─────────────────────────────────
+    private func sectionHeader(title: String, subtitle: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 18, weight: .semibold, design: .serif))
+                .italic()
+                .foregroundColor(FMColors.cream)
+            Spacer()
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundColor(FMColors.cream.opacity(0.3))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+ 
+    // ─────────────────────────────────
+    // MARK: — Nutrition Card
+    // ─────────────────────────────────
+    private func nutritionCard(_ s: SearchViewModel.NutritionSummary) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(s.dishName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(FMColors.cream)
+                    Text("community average · \(s.postCount) scans")
+                        .font(.system(size: 11))
+                        .foregroundColor(FMColors.cream.opacity(0.35))
+                }
+                Spacer()
+                (
+                    Text("~\(s.avgCal)")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundColor(FMColors.orange)
+                    + Text(" kcal")
+                        .font(.system(size: 12))
+                        .foregroundColor(FMColors.orange.opacity(0.7))
+                )
+            }
+ 
+            HStack(spacing: 0) {
+                macroCell(
+                    label: "Protein",
+                    value: "\(Int(s.avgPro))g",
+                    color: FMColors.green
+                )
+                Rectangle()
+                    .fill(FMColors.cream.opacity(0.08))
+                    .frame(width: 1, height: 32)
+                macroCell(
+                    label: "Carbs",
+                    value: "\(Int(s.avgCarbs))g",
+                    color: FMColors.yellow
+                )
+                Rectangle()
+                    .fill(FMColors.cream.opacity(0.08))
+                    .frame(width: 1, height: 32)
+                macroCell(
+                    label: "Fat",
+                    value: "\(Int(s.avgFat))g",
+                    color: FMColors.orange
+                )
+            }
+            .padding(.vertical, 10)
+            .background(Color(hex: "141510"))
+            .cornerRadius(10)
+        }
+        .padding(14)
+        .background(Color(hex: "1C1D17"))
+        .cornerRadius(14)
         .overlay(
-            Rectangle()
-                .fill(FMColors.border2)
-                .frame(height: 0.5),
-            alignment: .bottom
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(FMColors.green.opacity(0.15), lineWidth: 1)
         )
     }
-}
-
-// ─────────────────────────────────────
-// MARK: — Trending Dishes Section
-// ─────────────────────────────────────
-private struct TrendingDishesSection: View {
  
-    let dishes: [FMTrendingDish]
+    private func macroCell(
+        label: String,
+        value: String,
+        color: Color
+    ) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(FMColors.cream.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity)
+    }
+ 
+    // ─────────────────────────────────
+    // MARK: — Posts Grid
+    // ─────────────────────────────────
+    private var postsGrid: some View {
+        LazyVGrid(columns: columns, spacing: 2) {
+            ForEach(viewModel.filteredPosts) { post in
+                SearchPostCell(post: post)
+            }
+        }
+    }
+ 
+    // ─────────────────────────────────
+    // MARK: — Loading
+    // ─────────────────────────────────
+    private var loadingView: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .tint(FMColors.green)
+                .scaleEffect(1.2)
+            Text("Loading scans...")
+                .font(.system(size: 13))
+                .foregroundColor(FMColors.cream.opacity(0.3))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+ 
+    // ─────────────────────────────────
+    // MARK: — Empty
+    // ─────────────────────────────────
+    private var emptyView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "fork.knife.circle")
+                .font(.system(size: 40))
+                .foregroundColor(FMColors.cream.opacity(0.15))
+            Text("No results")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(FMColors.cream.opacity(0.4))
+            Text("Try pizza, sushi, burger...")
+                .font(.system(size: 12))
+                .foregroundColor(FMColors.cream.opacity(0.2))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+}
+ 
+// ─────────────────────────────────────
+// MARK: — Search Post Cell
+// ─────────────────────────────────────
+struct SearchPostCell: View {
+ 
+    let post: FMPost
  
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        GeometryReader { geo in
+            let size = geo.size.width
  
-            // Section header
-            HStack {
-                Text("🔥 TRENDING TODAY")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(FMColors.cream25)
-                    .tracking(1.2)
-                Spacer()
-                Text("See all")
-                    .font(.system(size: 12))
-                    .foregroundColor(FMColors.green)
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
+            ZStack(alignment: .bottomLeading) {
  
-            // Horizontal scroll
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(dishes) { dish in
-                        TrendingDishCard(dish: dish)
+                // ── Photo or gradient ─────────
+                if let imageURL = post.imageURL,
+                   !imageURL.isEmpty,
+                   let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        default:
+                            gradientBG
+                        }
                     }
+                    .frame(width: size, height: size)
+                    .clipped()
+                } else {
+                    gradientBG
+                        .frame(width: size, height: size)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 4)
-            }
-        }
-        .padding(.bottom, 8)
-    }
-}
-
-// ─────────────────────────────────────
-// MARK: — Suggested Users Section
-// ─────────────────────────────────────
-private struct SuggestedUsersSection: View {
  
-    @Binding var users:  [FMSearchUser]
-    let filter: String
+                // ── Gradient overlay ──────────
+                LinearGradient(
+                    colors: [.black.opacity(0.75), .clear],
+                    startPoint: .bottom,
+                    endPoint:   .top
+                )
+                .frame(height: size * 0.55)
  
-    var filtered: [FMSearchUser] {
-        switch filter {
-        case "Following": return users.filter { $0.isFollowing }
-        default:          return users
-        }
-    }
- 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
- 
-            HStack {
-                Text("PEOPLE TO FOLLOW")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(FMColors.cream25)
-                    .tracking(1.2)
-                Spacer()
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
- 
-            ForEach(filtered.indices, id: \.self) { index in
-                if let userIndex = users.firstIndex(where: {
-                    $0.id == filtered[index].id
-                }) {
-                    UserRow(user: $users[userIndex])
-                        .padding(.horizontal, 18)
+                // ── Dish + calories ───────────
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(post.dishName)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(FMColors.cream)
+                        .lineLimit(1)
+                    Text("\(post.nutrition.calories) kcal")
+                        .font(.system(size: 8))
+                        .foregroundColor(FMColors.orange)
                 }
-            }
-        }
-        .padding(.bottom, 8)
-    }
-}
+                .padding(5)
  
-// ─────────────────────────────────────
-// MARK: — Search Results Section
-// ─────────────────────────────────────
-private struct SearchResultsSection: View {
- 
-    @Binding var users:    [FMSearchUser]
-    let filtered: [FMSearchUser]
- 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
- 
-            HStack {
-                Text("\(filtered.count) RESULTS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(FMColors.cream25)
-                    .tracking(1.2)
-                Spacer()
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
- 
-            if filtered.isEmpty {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 36))
-                        .foregroundColor(FMColors.cream.opacity(0.15))
-                    Text("No results found")
-                        .font(.system(size: 16, weight: .medium, design: .serif))
-                        .foregroundColor(FMColors.cream.opacity(0.4))
-                    Text("Try searching by name or dish")
-                        .font(.system(size: 13))
-                        .foregroundColor(FMColors.cream25)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
- 
-            } else {
-                ForEach(filtered.indices, id: \.self) { index in
-                    if let userIndex = users.firstIndex(where: {
-                        $0.id == filtered[index].id
-                    }) {
-                        UserRow(user: $users[userIndex])
-                            .padding(.horizontal, 18)
+                // ── Emoji top right ───────────
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text(post.foodEmoji)
+                            .font(.system(size: 13))
+                            .padding(4)
                     }
+                    Spacer()
                 }
             }
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+ 
+    private var gradientBG: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(hex: post.bgColor1),
+                    Color(hex: post.bgColor2)
+                ],
+                startPoint: .topLeading,
+                endPoint:   .bottomTrailing
+            )
+            Text(post.foodEmoji)
+                .font(.system(size: 32))
         }
     }
 }

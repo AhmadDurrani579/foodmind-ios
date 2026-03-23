@@ -8,86 +8,11 @@
 import SwiftUI
 
 
-struct FMScanHistoryItem: Identifiable {
-    let id:       String
-    let emoji:    String
-    let name:     String
-    let time:     String
-    let calories: Int
-    let protein:  Int
-    let carbs:    Int
-    let fat:      Int
-    let styleTag: String
-}
- 
-extension FMScanHistoryItem {
-    static let mockData: [FMScanHistoryItem] = [
-        FMScanHistoryItem(
-            id: "s1",
-            emoji: "🥗",
-            name: "Grilled Chicken Salad",
-            time: "Today · 1:24 PM",
-            calories: 380,
-            protein: 42,
-            carbs: 12,
-            fat: 9,
-            styleTag: "Healthy"
-        ),
-        FMScanHistoryItem(
-            id: "s2",
-            emoji: "🥣",
-            name: "Overnight Oats",
-            time: "Today · 8:30 AM",
-            calories: 340,
-            protein: 14,
-            carbs: 52,
-            fat: 8,
-            styleTag: "Breakfast"
-        ),
-        FMScanHistoryItem(
-            id: "s3",
-            emoji: "🍝",
-            name: "Spaghetti Bolognese",
-            time: "Yesterday · 7:12 PM",
-            calories: 620,
-            protein: 28,
-            carbs: 74,
-            fat: 18,
-            styleTag: "Italian"
-        ),
-        FMScanHistoryItem(
-            id: "s4",
-            emoji: "🍳",
-            name: "Eggs & Avocado Toast",
-            time: "Yesterday · 9:00 AM",
-            calories: 420,
-            protein: 18,
-            carbs: 38,
-            fat: 22,
-            styleTag: "Breakfast"
-        ),
-        FMScanHistoryItem(
-            id: "s5",
-            emoji: "🍕",
-            name: "Margherita Pizza",
-            time: "2 days ago · 8:30 PM",
-            calories: 890,
-            protein: 31,
-            carbs: 98,
-            fat: 34,
-            styleTag: "Italian"
-        )
-    ]
-}
-
-
 struct ProfileView: View {
-    
-    // Mock data — replace with real user later
-    @State private var scanHistory = FMScanHistoryItem.mockData
+
     @State private var showSettings = false
-    
-    // Weekly calorie bars (Mon–Sun)
+    @StateObject private var viewModel = ProfileViewModel()
+
     private let weeklyBars: [(String, CGFloat, Bool)] = [
         ("Mon", 0.70, false),
         ("Tue", 0.88, true),
@@ -97,38 +22,32 @@ struct ProfileView: View {
         ("Sat", 0.65, false),
         ("Sun", 0.72, false)
     ]
-    
+
     var body: some View {
         ZStack {
             FMColors.background.ignoresSafeArea()
-            
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    
-                    // ── Header ──────────────
+
+                    // Header
                     ProfileHeader(showSettings: $showSettings)
-                    
+
                     VStack(spacing: 12) {
-                        
-                        // ── Profile Card ────
-                        ProfileCard()
-                        
-                        // ── Stats Strip ─────
-                        ProfileStatsStrip()
-                        
-                        // ── Food Identity ───
+
+                        ProfileCard(user: viewModel.user)
+
+                        ProfileStatsStrip(stats: viewModel.stats)
+
                         FoodIdentityCard()
-                        
-                        // ── Weekly Chart ────
+
                         WeeklyCalorieChart(bars: weeklyBars)
-                        
-                        // ── Macros ──────────
+
                         MacroBreakdownCard()
-                        
-                        // ── Scan History ────
-                        ScanHistorySection(items: scanHistory)
-                        
-                        // Tab bar space
+
+                        // Dynamic Scan History
+                        ScanHistorySection(items: viewModel.recentScans)
+
                         Color.clear.frame(height: 90)
                     }
                     .padding(.horizontal, 18)
@@ -136,11 +55,17 @@ struct ProfileView: View {
                 }
             }
         }
+        .onAppear {
+            viewModel.fetchProfile()
+            viewModel.fetchRecentScans()
+            viewModel.fetchStats()
+        }
         .sheet(isPresented: $showSettings) {
             SettingsPlaceholder()
         }
     }
 }
+
 private struct ProfileHeader: View {
         @Binding var showSettings: Bool
      
@@ -181,55 +106,73 @@ private struct ProfileHeader: View {
     }
 
 private struct ProfileCard: View {
+    let user: User?
     var body: some View {
         HStack(spacing: 14) {
- 
             // Avatar with glow ring
             ZStack {
                 Circle()
                     .stroke(FMColors.green.opacity(0.4), lineWidth: 2)
                     .frame(width: 66, height: 66)
- 
+
                 Circle()
                     .fill(FMColors.surface2)
                     .frame(width: 58, height: 58)
- 
-                Text("A")
-                    .font(.system(size: 24, weight: .medium, design: .serif))
-                    .foregroundColor(FMColors.cream)
+
+                if let avatar = user?.avatarURL,
+                   let url = URL(string: avatar) {
+
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .frame(width: 58, height: 58)
+                    .clipShape(Circle())
+
+                } else {
+
+                    Text(initial)
+                        .font(.system(size: 24, weight: .medium, design: .serif))
+                        .foregroundColor(FMColors.cream)
+                }
             }
- 
+
             // Info
             VStack(alignment: .leading, spacing: 4) {
-                Text("Ahmad Khan")
+
+                Text(fullName)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(FMColors.cream)
- 
-                Text("@ahmad · London 🇬🇧")
+
+                Text("@\(user?.username ?? "")")
                     .font(.system(size: 12))
                     .foregroundColor(FMColors.cream25)
- 
+
                 Text("\"Eating well, tracking everything\"")
                     .font(.system(size: 12))
                     .italic()
                     .foregroundColor(FMColors.cream.opacity(0.4))
                     .padding(.top, 2)
             }
- 
+
             Spacer()
- 
-            // Edit button
-            Button("Edit") {}
-                .font(.system(size: 12))
-                .foregroundColor(FMColors.green)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(FMColors.surface)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(FMColors.border, lineWidth: 1)
-                )
+
+            Button("Edit") {
+
+            }
+            .font(.system(size: 12))
+            .foregroundColor(FMColors.green)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(FMColors.surface)
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(FMColors.border, lineWidth: 1)
+            )
         }
         .padding(14)
         .background(FMColors.surface)
@@ -239,30 +182,42 @@ private struct ProfileCard: View {
                 .stroke(FMColors.border, lineWidth: 1)
         )
     }
+
+    // MARK: Helpers
+
+    private var fullName: String {
+        "\(user?.firstName ?? "") \(user?.lastName ?? "")"
+    }
+
+    private var initial: String {
+        user?.firstName.prefix(1).uppercased() ?? "?"
+    }
 }
  
 
 private struct ProfileStatsStrip: View {
+    let stats: ScanStats?
+
     var body: some View {
         HStack(spacing: 1) {
             ProfileStatCell(
-                value: "47",
+                value: "\(stats?.totalScans ?? 0)",
                 label: "Scans",
                 color: FMColors.green
             )
             ProfileStatCell(
-                value: "1,840",
+                value: "\(stats?.avgCalories ?? 0)",
                 label: "Avg kcal",
                 color: FMColors.cream
             )
             ProfileStatCell(
-                value: "234",
+                value: "—",         // ← from social feature later
                 label: "Followers",
                 color: FMColors.cream
             )
             ProfileStatCell(
-                value: "12 🔥",
-                label: "Streak",
+                value: "\(stats?.totalThisWeek ?? 0) 🔥",
+                label: "This week",
                 color: FMColors.orange
             )
         }
@@ -275,12 +230,12 @@ private struct ProfileStatsStrip: View {
     }
 }
 
+
 private struct ScanHistorySection: View {
-    let items: [FMScanHistoryItem]
- 
+    let items: [Scan]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
- 
             HStack {
                 Text("RECENT SCANS")
                     .font(.system(size: 10, weight: .medium))
@@ -291,13 +246,37 @@ private struct ScanHistorySection: View {
                     .font(.system(size: 12))
                     .foregroundColor(FMColors.green)
             }
- 
-            ForEach(items) { item in
-                ScanHistoryRow(item: item)
+
+            if items.isEmpty {
+                // ← Empty state
+                VStack(spacing: 8) {
+                    Image(systemName: "viewfinder")
+                        .font(.system(size: 28))
+                        .foregroundColor(FMColors.cream.opacity(0.2))
+                    Text("No scans yet")
+                        .font(.system(size: 13))
+                        .foregroundColor(FMColors.cream.opacity(0.3))
+                    Text("Scan your first food to see history")
+                        .font(.system(size: 11))
+                        .foregroundColor(FMColors.cream.opacity(0.2))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(24)
+                .background(FMColors.surface)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(FMColors.border2, lineWidth: 1)
+                )
+            } else {
+                ForEach(items) { item in
+                    ScanHistoryRow(item: item)
+                }
             }
         }
     }
 }
+
 
 private struct SettingsPlaceholder: View {
     @Environment(\.dismiss) var dismiss

@@ -21,11 +21,12 @@ struct SignUpView: View {
     @State private var isLoading    = false
     @State private var showError    = false
     @State private var errorMessage = ""
-
+    @State private var selectedImage: UIImage?
     // Animation
     @State private var contentOpacity: Double  = 0
     @State private var contentOffset:  CGFloat = 20
-
+    @StateObject private var viewModel = AuthViewModel()
+    
     var body: some View {
         ZStack {
 
@@ -96,7 +97,7 @@ struct SignUpView: View {
                     VStack(spacing: 14) {
 
                         // Avatar picker
-                        AvatarPickerRow()
+                        AvatarPickerRow(selectedImage: $selectedImage)
 
                         // First + Last name
                         HStack(spacing: 10) {
@@ -205,36 +206,56 @@ struct SignUpView: View {
     // MARK: — Actions
     // ─────────────────────────────────
     private func handleSignUp() {
-
+        TokenManager.shared.clearToken()
         // Validation
         guard !firstName.isEmpty else {
             showErrorMessage("Please enter your first name")
             return
         }
+
         guard !username.isEmpty else {
             showErrorMessage("Please choose a username")
             return
         }
+
         guard !email.isEmpty, email.contains("@") else {
             showErrorMessage("Please enter a valid email")
             return
         }
+
         guard password.count >= 6 else {
             showErrorMessage("Password must be at least 6 characters")
             return
         }
+
         guard agreedToTerms else {
             showErrorMessage("Please agree to the Terms of Service")
             return
         }
 
-        // Show loading
         isLoading = true
 
-        // Simulate API call (replace with real auth later)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            isLoading = false
-            onSignUpSuccess()
+        Task {
+            defer {
+                isLoading = false
+            }
+
+            do {
+                _ = try await viewModel.signup(
+                    email: email,
+                    username: username,
+                    firstName: firstName,
+                    lastName: lastName,
+                    password: password,
+                    avatar: selectedImage
+                )
+
+                // Navigate to main screen after success
+                onSignUpSuccess()
+
+            } catch {
+                showErrorMessage(error.localizedDescription)
+            }
         }
     }
 

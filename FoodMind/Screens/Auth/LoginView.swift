@@ -22,7 +22,8 @@ struct LoginView: View {
     // Animation states
     @State private var contentOpacity: Double  = 0
     @State private var contentOffset:  CGFloat = 20
- 
+    @StateObject private var viewModel = AuthViewModel()
+
     var body: some View {
         ZStack {
  
@@ -122,7 +123,6 @@ struct LoginView: View {
     // MARK: — Actions
     // ─────────────────────────────────
     private func handleLogin() {
-        // Basic validation
         guard !email.isEmpty, !password.isEmpty else {
             showErrorMessage("Please fill in all fields")
             return
@@ -135,14 +135,32 @@ struct LoginView: View {
             showErrorMessage("Password must be at least 6 characters")
             return
         }
- 
-        // Show loading
+
         isLoading = true
- 
-        // Simulate API call (replace with real auth later)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            isLoading = false
-            onLoginSuccess()
+
+        Task {
+            defer {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
+            }
+
+            do {
+                _ = try await viewModel.login(
+                    email: email,
+                    password: password
+                )
+
+                // ← Must be on main thread
+                await MainActor.run {
+                    onLoginSuccess()
+                }
+
+            } catch {
+                await MainActor.run {
+                    showErrorMessage(error.localizedDescription)
+                }
+            }
         }
     }
  

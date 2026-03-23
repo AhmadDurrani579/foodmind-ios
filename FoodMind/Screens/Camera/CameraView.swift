@@ -11,41 +11,62 @@ import PhotosUI
 struct CameraView: View {
  
     @Binding var selectedTab: FMTab
- 
-    // ── State ─────────────────────────
-    @StateObject private var classifier = FoodClassifierManager()
-    @State private var selectedImage:  UIImage?    = nil
-    @State private var showImagePicker: Bool       = false
-    @State private var photosItem:     PhotosPickerItem? = nil
-    @State private var showResult:     Bool        = false
-    @State private var cameraMode:     CameraMode  = .scan
- 
+    @EnvironmentObject var wsManager: WebSocketManager
+    @StateObject private var metalProcessor = MetalProcessor()
+
+    @StateObject private var cameraManager = CameraManager()
+    @StateObject private var classifier    = FoodClassifierManager()
+    @StateObject private var visionManager = VisionManager()
+    @State private var frozenResult: FoodClassificationResult? = nil
+
+    @State private var showImagePicker:  Bool             = false
+    @State private var photosItem:       PhotosPickerItem? = nil
+    @State private var selectedImage:    UIImage?          = nil
+    @State private var showResult:       Bool              = false
+    @State private var cameraMode:       CameraMode        = .scan
+    @State private var isLiveMode:       Bool              = true
+    @State private var classifyInterval: Int               = 0
+    @State private var capturedFrame: UIImage? = nil
+    @State private var metalInterval = 0
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
  
             VStack(spacing: 0) {
- 
-                // ── Top Bar ─────────────────
                 topBar
  
-                // ── Main Content ────────────
                 ZStack {
-                    if let image = selectedImage {
-                        // Show selected image
+                    if isLiveMode {
+                        liveCameraView
+                    } else if let image = selectedImage {
                         selectedImageView(image: image)
                     } else {
-                        // Show empty state
                         emptyStateView
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
  
-                // ── Bottom Controls ─────────
                 bottomControls
             }
         }
-        // Image picker
+        .onAppear {
+            cameraManager.setup()
+            setupClassifierCallback()
+        }
+        .onDisappear {
+            cameraManager.stop()
+        }
+        .onChange(of: cameraManager.isAuthorized) {
+            if cameraManager.isAuthorized {
+        #if targetEnvironment(simulator)
+        print("Running on Simulator")
+        #else
+        cameraManager.start()
+        print("Running on Real Device")
+        #endif
+            }
+        }
         .photosPicker(
             isPresented: $showImagePicker,
             selection: $photosItem,
@@ -54,27 +75,105 @@ struct CameraView: View {
         .onChange(of: photosItem) {
             loadImage(from: photosItem)
         }
-        // Result sheet
+        // In CameraView — make sure onDismiss dismisses the sheet:
         .sheet(isPresented: $showResult) {
-            if let result = classifier.result,
-               let image = selectedImage {
+            if let frozenResult = frozenResult,
+               let backendResult = wsManager.scanResult {
                 ScanResultView(
-                    result: result,
-                    image: image,
+                    result:        frozenResult,
+                    backendResult: backendResult,
+                    validation:    wsManager.validation,
+                    image:         capturedFrame ?? selectedImage ?? UIImage(),
+                    imageURL:      wsManager.imageURL,
                     onDismiss: {
-                        showResult = false
+                        showResult        = false
+                        self.frozenResult = nil
+                        wsManager.reset()
+                        if isLiveMode { cameraManager.start() }
                     }
-                )
+                ) .presentationDetents([.large])
+                  .presentationDragIndicator(.visible)
+                  .presentationCornerRadius(20)
+            }
+        }
+
+        .onChange(of: wsManager.scanResult) {
+            if wsManager.scanResult != nil {
+                showResult = true
+            }
+        }
+
+    }
+ 
+    // ── Setup classifier callback ──
+    private func setupClassifierCallback() {
+        cameraManager.onFrame = { pixelBuffer in
+
+            // Step 1: Detect plate distance
+            self.visionManager.detectPlate(in: pixelBuffer)
+
+            // ── Metal: Background thread, every 3rd frame ──
+//            DispatchQueue.global(qos: .userInteractive).async {
+//                self.metalInterval += 1
+//                if self.metalInterval >= 3 {
+//                    self.metalInterval = 0
+//                    self.metalProcessor.process(
+//                        pixelBuffer:  pixelBuffer,
+//                        boundingBox:  self.visionManager.plateBoundingBox,
+//                        confidence:   Float(self.classifier.result?.confidence ?? 0),
+//                        hasDetection: self.visionManager.plateDistance.shouldClassify
+//                    )
+//                }
+//            }
+
+            DispatchQueue.main.async {
+                self.classifyInterval += 1
+
+                if self.classifyInterval >= 15 {
+                    self.classifyInterval = 0
+
+                    // Step 2: Only classify if close enough
+                    guard self.visionManager.plateDistance
+                        .shouldClassify else { return }
+
+                    // ── Capture frame as UIImage ──────
+                    self.capturedFrame = self.pixelBufferToUIImage(pixelBuffer)
+
+                    // Step 3: Classify with crop
+                    let box = self.visionManager.plateBoundingBox
+
+                    if box != .zero {
+                        self.classifier.classifyWithCrop(
+                            pixelBuffer: pixelBuffer,
+                            cropRect: box
+                        )
+                    } else {
+                        self.classifier.classify(
+                            pixelBuffer: pixelBuffer
+                        )
+                    }
+                }
             }
         }
     }
- 
-    // ─────────────────────────────────
-    // MARK: — Top Bar
-    // ─────────────────────────────────
+    
+    // Add this to CameraView:
+    private func pixelBufferToUIImage(
+        _ pixelBuffer: CVPixelBuffer
+    ) -> UIImage? {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(
+            ciImage,
+            from: ciImage.extent
+        ) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+
+    
+    // ── Top Bar ──
     private var topBar: some View {
         HStack {
-            // X button → goes back to feed
             FMHeaderButton(icon: "xmark") {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     selectedTab = .feed
@@ -83,241 +182,205 @@ struct CameraView: View {
  
             Spacer()
  
-            // Scan / Menu toggle
             HStack(spacing: 0) {
-                CameraModeButton(
-                    label: "Scan",
-                    isActive: cameraMode == .scan
-                ) {
-                    cameraMode = .scan
-                }
-                CameraModeButton(
-                    label: "Menu",
-                    isActive: cameraMode == .menu
-                ) {
-                    cameraMode = .menu
-                }
+                CameraModeButton(label: "Scan", isActive: cameraMode == .scan) { cameraMode = .scan }
+                CameraModeButton(label: "Menu", isActive: cameraMode == .menu) { cameraMode = .menu }
             }
             .background(Color.white.opacity(0.08))
             .cornerRadius(20)
  
             Spacer()
  
-            // Flash placeholder
-            FMHeaderButton(icon: "bolt.slash")
+            FMHeaderButton(icon: "bolt.slash") {
+                cameraManager.toggleFlash()
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 56)
         .padding(.bottom, 12)
     }
  
-    // ─────────────────────────────────
-    // MARK: — Empty State
-    // ─────────────────────────────────
-    private var emptyStateView: some View {
-        VStack(spacing: 24) {
- 
-            // Animated viewfinder
-            ZStack {
-                // Corner guides
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        FMColors.green.opacity(0.3),
-                        style: StrokeStyle(
-                            lineWidth: 1,
-                            dash: [8, 4]
-                        )
-                    )
-                    .frame(width: 220, height: 220)
- 
-                CameraCorners()
-                    .frame(width: 220, height: 220)
- 
-                VStack(spacing: 12) {
-                    Image(systemName: "fork.knife.circle")
-                        .font(.system(size: 44))
-                        .foregroundColor(FMColors.green.opacity(0.5))
- 
-                    Text("Pick a food photo")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(FMColors.cream.opacity(0.5))
- 
-                    Text("Tap the gallery button below")
-                        .font(.system(size: 12))
-                        .foregroundColor(FMColors.cream.opacity(0.25))
-                }
-            }
-        }
-    }
- 
-    // ─────────────────────────────────
-    // MARK: — Selected Image View
-    // ─────────────────────────────────
-    private func selectedImageView(image: UIImage) -> some View {
+    // ── Live Camera ──
+    
+    private var liveCameraView: some View {
         ZStack {
-            // Image
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
- 
-            // Loading overlay
-            if classifier.isRunning {
-                ZStack {
-                    Color.black.opacity(0.5)
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .progressViewStyle(
-                                CircularProgressViewStyle(tint: FMColors.green)
-                            )
-                            .scaleEffect(1.5)
- 
-                        Text("Analysing food...")
-                            .font(.system(size: 14))
-                            .foregroundColor(FMColors.cream.opacity(0.7))
- 
-                        Text("MobileNet · Neural Engine")
-                            .font(.system(size: 11))
-                            .foregroundColor(FMColors.cream.opacity(0.35))
+            if cameraManager.isAuthorized {
+                CameraPreviewView(session: cameraManager.session)
+                    .ignoresSafeArea()
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "camera.slash")
+                        .font(.system(size: 48))
+                        .foregroundColor(FMColors.cream.opacity(0.3))
+                    Text("Camera access required")
+                        .font(.system(size: 16))
+                        .foregroundColor(FMColors.cream.opacity(0.5))
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
                     }
+                    .foregroundColor(FMColors.green)
                 }
             }
- 
-            // Result overlay (when done)
-            if let result = classifier.result,
-               !classifier.isRunning {
+
+            // ── Corner guides (confidence aware) ──
+            CameraCorners(confidence: classifier.result?.confidence ?? 0)
+                .frame(width: 240, height: 240)
+
+            // ── Distance Guide ──────────────
+            VStack {
+                Spacer().frame(height: 80)
+                if visionManager.plateDistance != .perfect
+                   && visionManager.plateDistance != .unknown {
+                    HStack(spacing: 8) {
+                        Image(systemName: visionManager.plateDistance.icon)
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: visionManager.plateDistance.color))
+                        Text(visionManager.plateDistance.message)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: visionManager.plateDistance.color))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(20)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: visionManager.plateDistance.message)
+                }
+                Spacer()
+            }
+
+            // ── Result overlay ──────────────
+            if let result = classifier.result {
                 VStack {
                     Spacer()
                     resultOverlay(result: result)
                 }
             }
- 
-            // Error overlay
-            if let error = classifier.error {
-                VStack {
+
+            // ── Scanning tag ────────────────
+            VStack {
+                HStack {
                     Spacer()
-                    errorOverlay(error: error)
+                    if classifier.isRunning { scanningTag }
+                    Spacer()
                 }
+                .padding(.top, 16)
+                Spacer()
             }
         }
     }
+
  
-    // ─────────────────────────────────
-    // MARK: — Result Overlay
-    // ─────────────────────────────────
+    // ── Result Overlay ──
     private func resultOverlay(result: FoodClassificationResult) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
- 
-            // Dish name + confidence
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(result.displayName)
                         .font(.system(size: 20, weight: .semibold, design: .serif))
+                        .animation(.easeInOut(duration: 0.3), value: result.dishName)
                         .italic()
                         .foregroundColor(FMColors.cream)
- 
-                    HStack(spacing: 6) {
-                        // Confidence dot
+                    HStack(spacing: 5) {
                         Circle()
                             .fill(Color(hex: result.confidenceLevel.color))
                             .frame(width: 6, height: 6)
- 
-                        Text("\(result.confidencePercent)% confident")
-                            .font(.system(size: 12))
-                            .foregroundColor(FMColors.cream.opacity(0.6))
- 
-                        Text("·")
-                            .foregroundColor(FMColors.cream.opacity(0.3))
- 
-                        Text("MobileNet")
-                            .font(.system(size: 12))
-                            .foregroundColor(FMColors.cream.opacity(0.35))
+                        Text("\(result.confidencePercent)% · FoodClassifier")
+                            .font(.system(size: 11))
+                            .foregroundColor(FMColors.cream.opacity(0.55))
                     }
                 }
- 
                 Spacer()
- 
-                // Confidence badge
                 Text("\(result.confidencePercent)%")
-                    .font(.system(
-                        size: 22,
-                        weight: .bold,
-                        design: .serif
-                    ))
+                    .font(.system(size: 24, weight: .bold, design: .serif))
                     .foregroundColor(Color(hex: result.confidenceLevel.color))
-            }
- 
-            // Top 3 alternatives
-            if result.allResults.count > 1 {
-                HStack(spacing: 6) {
-                    Text("Also:")
-                        .font(.system(size: 11))
-                        .foregroundColor(FMColors.cream.opacity(0.3))
- 
-                    ForEach(
-                        Array(result.allResults.dropFirst().prefix(2)),
-                        id: \.label
-                    ) { item in
-                        Text(item.label
-                            .replacingOccurrences(of: "_", with: " ")
-                            .capitalized
-                        )
-                        .font(.system(size: 11))
-                        .foregroundColor(FMColors.cream.opacity(0.4))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.white.opacity(0.08))
-                        .cornerRadius(6)
-                    }
-                }
             }
         }
         .padding(14)
         .background(
             LinearGradient(
-                colors: [
-                    Color.black.opacity(0.9),
-                    Color.black.opacity(0.6),
-                    .clear
-                ],
+                colors: [Color.black.opacity(0.88), Color.black.opacity(0.5), .clear],
                 startPoint: .bottom,
                 endPoint: .top
             )
         )
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.3), value: result.dishName)
     }
  
-    // ─────────────────────────────────
-    // MARK: — Error Overlay
-    // ─────────────────────────────────
-    private func errorOverlay(error: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(FMColors.orange)
-            Text(error)
-                .font(.system(size: 13))
-                .foregroundColor(FMColors.cream.opacity(0.7))
+    // ── Scanning Tag ──
+    private var scanningTag: some View {
+        HStack(spacing: 5) {
+            Circle().fill(FMColors.green).frame(width: 5, height: 5)
+            Text("Scanning")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(FMColors.green)
         }
-        .padding(14)
-        .background(Color.black.opacity(0.8))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(FMColors.green.opacity(0.12))
+        .cornerRadius(20)
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(FMColors.green.opacity(0.25), lineWidth: 1))
     }
  
-    // ─────────────────────────────────
-    // MARK: — Bottom Controls
-    // ─────────────────────────────────
+    // ── Selected Image ──
+    private func selectedImageView(image: UIImage) -> some View {
+        ZStack {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+ 
+            if classifier.isRunning {
+                Color.black.opacity(0.5)
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: FMColors.green))
+                        .scaleEffect(1.4)
+                    Text("Analysing...")
+                        .font(.system(size: 13))
+                        .foregroundColor(FMColors.cream.opacity(0.6))
+                }
+            }
+ 
+            if let result = classifier.result, !classifier.isRunning {
+                VStack { Spacer(); resultOverlay(result: result) }
+            }
+        }
+    }
+ 
+    // ── Empty State ──
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(FMColors.green.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [8, 4]))
+                    .frame(width: 220, height: 220)
+                CameraCorners().frame(width: 220, height: 220)
+                VStack(spacing: 12) {
+                    Image(systemName: "fork.knife.circle")
+                        .font(.system(size: 44))
+                        .foregroundColor(FMColors.green.opacity(0.5))
+                    Text("Pick a food photo")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(FMColors.cream.opacity(0.5))
+                }
+            }
+        }
+    }
+ 
+    // ── Bottom Controls ──
     private var bottomControls: some View {
         VStack(spacing: 14) {
  
-            // MobileNet result card
+            // Result card
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(FMColors.surface)
                         .frame(width: 42, height: 42)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(FMColors.border, lineWidth: 1)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(FMColors.border, lineWidth: 1))
                     Image(systemName: "brain.head.profile")
                         .font(.system(size: 16))
                         .foregroundColor(FMColors.green.opacity(0.6))
@@ -326,201 +389,186 @@ struct CameraView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if classifier.isRunning {
                         Text("Analysing...")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(FMColors.cream.opacity(0.6))
+                            .font(.system(size: 13))
+                            .foregroundColor(FMColors.cream.opacity(0.5))
                     } else if let result = classifier.result {
                         Text(result.displayName)
-                            .font(.system(
-                                size: 14,
-                                weight: .semibold,
-                                design: .serif
-                            ))
-                            .foregroundColor(FMColors.cream)
+                            .font(.system(size: 14, weight: .semibold, design: .serif))
                             .italic()
+                            .foregroundColor(FMColors.cream)
                     } else {
-                        Text("Waiting for food...")
+                        Text("Point at food...")
                             .font(.system(size: 13))
-                            .foregroundColor(FMColors.cream.opacity(0.4))
+                            .foregroundColor(FMColors.cream.opacity(0.3))
                     }
- 
-                    Text("MobileNet · Neural Engine")
-                        .font(.system(size: 11))
+                    Text("FoodClassifier · Neural Engine")
+                        .font(.system(size: 10))
                         .foregroundColor(FMColors.cream.opacity(0.2))
                 }
  
                 Spacer()
  
-                // Confidence score
-                if let result = classifier.result,
-                   !classifier.isRunning {
+                if let result = classifier.result, !classifier.isRunning {
                     Text("\(result.confidencePercent)%")
-                        .font(.system(
-                            size: 20,
-                            weight: .semibold,
-                            design: .serif
-                        ))
-                        .foregroundColor(
-                            Color(hex: result.confidenceLevel.color)
-                        )
+                        .font(.system(size: 20, weight: .semibold, design: .serif))
+                        .foregroundColor(Color(hex: result.confidenceLevel.color))
                 } else {
-                    Text("—")
-                        .font(.system(size: 18))
-                        .foregroundColor(FMColors.cream.opacity(0.2))
+                    Text("—").font(.system(size: 18)).foregroundColor(FMColors.cream.opacity(0.2))
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(FMColors.surface)
             .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(FMColors.border, lineWidth: 1)
-            )
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(FMColors.border, lineWidth: 1))
  
-            // Action buttons row
+            // Buttons row
             HStack {
- 
-                // Gallery button
+                // Gallery
                 Button {
+                    isLiveMode = false
                     classifier.reset()
                     showImagePicker = true
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: "photo.on.rectangle")
-                            .font(.system(size: 20))
-                            .foregroundColor(FMColors.cream.opacity(0.6))
-                        Text("Gallery")
-                            .font(.system(size: 10))
-                            .foregroundColor(FMColors.cream.opacity(0.3))
+                        Image(systemName: "photo.on.rectangle").font(.system(size: 20)).foregroundColor(FMColors.cream.opacity(0.6))
+                        Text("Gallery").font(.system(size: 10)).foregroundColor(FMColors.cream.opacity(0.3))
                     }
                     .frame(width: 56, height: 56)
                     .background(FMColors.surface2)
                     .cornerRadius(14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(FMColors.border, lineWidth: 1)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(FMColors.border, lineWidth: 1))
                 }
  
                 Spacer()
  
-                // Main scan button
+                // Shutter
                 Button {
-                    if selectedImage == nil {
-                        showImagePicker = true
-                    } else if classifier.result != nil {
-                        showResult = true
+                    print("🔘 Deep Scan tapped")
+                    print("🔍 classifier.result: \(String(describing: classifier.result))")
+                    print("🖼️ selectedImage: \(String(describing: selectedImage))")
+                    print("🔌 wsManager state: \(wsManager.connectionState)")
+
+                    if let result = classifier.result {
+                        frozenResult = result
+                        cameraManager.stop()
+                        let imageToSend = isLiveMode ? capturedFrame : selectedImage
+                        
+                        print("🖼️ capturedFrame: \(String(describing: capturedFrame))")
+                        print("🖼️ imageToSend: \(String(describing: imageToSend))")
+
+
+                        // Send to backend
+                        if let image = imageToSend {
+                            wsManager.sendScan(
+                                image: image,
+                                mobileNetResult: result
+                            )
+                        }
+                        // Don't open sheet yet ← key change
                     }
                 } label: {
                     ZStack {
                         Circle()
-                            .stroke(
-                                FMColors.green.opacity(0.3),
-                                lineWidth: 3
-                            )
+                            .stroke(FMColors.green.opacity(0.3), lineWidth: 3)
                             .frame(width: 72, height: 72)
- 
+
                         Circle()
                             .fill(
-                                classifier.result != nil
-                                    ? FMColors.green
-                                    : FMColors.surface2
+                                wsManager.isScanning
+                                    ? FMColors.surface2
+                                    : classifier.result != nil
+                                        ? FMColors.green
+                                        : FMColors.surface2
                             )
                             .frame(width: 62, height: 62)
- 
-                        if classifier.isRunning {
+
+                        // Show spinner while waiting for backend
+                        if wsManager.isScanning {
                             ProgressView()
                                 .progressViewStyle(
-                                    CircularProgressViewStyle(
-                                        tint: FMColors.background
-                                    )
+                                    CircularProgressViewStyle(tint: FMColors.green)
                                 )
                         } else {
-                            Image(systemName:
-                                classifier.result != nil
-                                    ? "arrow.right.circle.fill"
-                                    : "viewfinder"
+                            Image(systemName: classifier.result != nil
+                                ? "arrow.right.circle.fill"
+                                : "viewfinder"
                             )
                             .font(.system(size: 24, weight: .medium))
                             .foregroundColor(
                                 classifier.result != nil
                                     ? FMColors.background
-                                    : FMColors.cream.opacity(0.4)
+                                    : FMColors.cream.opacity(0.3)
                             )
                         }
                     }
                 }
-                .disabled(classifier.isRunning)
- 
+
+                
                 Spacer()
  
-                // Deep scan button (sends to backend)
+                // Flip / Camera toggle
                 Button {
-                    // TODO: Send to backend via WebSocket
-                    // Coming tomorrow
+                    if isLiveMode {
+                        cameraManager.flipCamera()
+                    } else {
+                        isLiveMode = true
+                        classifier.reset()
+                        cameraManager.start()
+                    }
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: "waveform.and.magnifyingglass")
-                            .font(.system(size: 20))
-                            .foregroundColor(
-                                classifier.result != nil
-                                    ? FMColors.green.opacity(0.7)
-                                    : FMColors.cream.opacity(0.2)
-                            )
-                        Text("Deep Scan")
-                            .font(.system(size: 10))
-                            .foregroundColor(
-                                classifier.result != nil
-                                    ? FMColors.green.opacity(0.5)
-                                    : FMColors.cream.opacity(0.2)
-                            )
+                        Image(systemName: isLiveMode ? "arrow.triangle.2.circlepath" : "camera.fill")
+                            .font(.system(size: 20)).foregroundColor(FMColors.cream.opacity(0.6))
+                        Text(isLiveMode ? "Flip" : "Camera")
+                            .font(.system(size: 10)).foregroundColor(FMColors.cream.opacity(0.3))
                     }
                     .frame(width: 56, height: 56)
                     .background(FMColors.surface2)
                     .cornerRadius(14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(
-                                classifier.result != nil
-                                    ? FMColors.green.opacity(0.2)
-                                    : FMColors.border,
-                                lineWidth: 1
-                            )
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(FMColors.border, lineWidth: 1))
                 }
-                .disabled(classifier.result == nil)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(
-            Color.black.opacity(0.85)
-                .ignoresSafeArea(edges: .bottom)
-        )
+        .background(Color.black.opacity(0.85).ignoresSafeArea(edges: .bottom))
     }
  
-    // ─────────────────────────────────
-    // MARK: — Load Image From Picker
-    // ─────────────────────────────────
+    private func captureCurrentFrame() -> UIImage? {
+        // If in gallery mode return selected image
+        if !isLiveMode { return selectedImage }
+
+        // For live camera capture current frame
+        // For now return nil — live capture
+        // requires AVCapturePhotoOutput
+        // We'll add this next
+        return nil
+    }
+
+    // ── Load image from picker ──
     private func loadImage(from item: PhotosPickerItem?) {
         guard let item = item else { return }
- 
         Task {
             if let data = try? await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
- 
                 await MainActor.run {
                     selectedImage = image
-                    // Classify immediately
+                    isLiveMode    = false
+                    cameraManager.stop()
                     classifier.classify(image: image)
                 }
             }
         }
     }
 }
-
  
 enum CameraMode {
     case scan
     case menu
 }
+
+
+
+
+

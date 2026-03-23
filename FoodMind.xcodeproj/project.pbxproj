@@ -34,8 +34,9 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Helper/Extensions.swift,
-				ML/VisionManager.swift,
+				Info.plist,
 				Models/FMScanHistoryItem.swift,
+				Services/AuthService.swift,
 			);
 			target = E0BED1A42F64B21800C7ED2F /* FoodMind */;
 		};
@@ -46,9 +47,22 @@
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = E0BED1A32F64B21800C7ED2F /* Resources */;
 			membershipExceptions = (
+				AR/FoodARView.swift,
+				AR/FoodARViewController.swift,
 				Helper/Extensions.swift,
-				ML/VisionManager.swift,
+				Metal/MetalProcessor.swift,
+				Models/Auth/AvatarUploadResponse.swift,
+				Models/Auth/SignupRequest.swift,
 				Models/FMScanHistoryItem.swift,
+				Network/APIClient.swift,
+				Network/APIEndpoint.swift,
+				Network/HTTPMethod.swift,
+				Network/WebSocketManager.swift,
+				Repository/AuthRepository.swift,
+				Repository/ProfileRepository/ScanRepository.swift,
+				Screens/Auth/AuthViewModel.swift,
+				Screens/Auth/FaceAuthWelcomeView.swift,
+				Services/AuthService.swift,
 			);
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
@@ -428,7 +442,9 @@
 				DEVELOPMENT_TEAM = VVS3USCHVC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FoodMind/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "FoodMind needs camera access to scan your food";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FoodMind uses location for food recommendations";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FoodMind needs photo access to analyse your food";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -462,7 +478,9 @@
 				DEVELOPMENT_TEAM = VVS3USCHVC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FoodMind/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "FoodMind needs camera access to scan your food";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FoodMind uses location for food recommendations";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FoodMind needs photo access to analyse your food";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
