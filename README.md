@@ -229,8 +229,6 @@ open FoodMind.xcodeproj
 - Contributor to **Google WebRTC** (C++) and **OpenCV**
 - 8 live App Store apps
 
-Open to Senior iOS or ML-focused iOS roles in **London** or **remote**.
-
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://www.linkedin.com/in/ahmad-yar-98990690)
 [![Email](https://img.shields.io/badge/Email-Contact-green)](mailto:ahmaddurranitrg@gmail.com)
 
